@@ -12,7 +12,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:permission_handler/permission_handler.dart';
+
 import 'package:flutter/foundation.dart';
 
 // Diğer servisler
@@ -977,8 +977,20 @@ class AudioProvider extends ChangeNotifier {
     // MediaScanner usually takes a single path, but running too many at once is bad.
     // We already did the critical deletions.
 
-    // 5. Final Refresh
+    // 5. Final Refresh with Delay for System Sync
+    if (songsToDelete.length > 50) {
+      debugPrint("DEBUG: Large batch deleted. Waiting for MediaStore sync...");
+      await Future.delayed(const Duration(seconds: 2));
+    } else {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    // Only fetch if we really need to sync with disk, but for bulk, trust our removeWhere
     await fetchSongs();
+
+    debugPrint(
+      "DEBUG: Deletion operation finished. Remaining songs: ${_songs.length}",
+    );
     notifyListeners();
     return allDeleted;
   }
