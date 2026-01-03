@@ -925,9 +925,10 @@ class _HomeScreenState extends State<HomeScreen>
                 },
               );
 
-              // Execution
+              // 3. Execution
               final success = await provider.physicallyDeleteSongs(
                 selected,
+                context: context, // Pass context here
                 onProgress: (c, t) {
                   progressNotifier.value = c;
                 },

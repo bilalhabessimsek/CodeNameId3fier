@@ -12,6 +12,8 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 
 // Diğer servisler
 import 'tag_editor_service.dart';
@@ -877,14 +879,20 @@ class AudioProvider extends ChangeNotifier {
   Future<bool> physicallyDeleteSongs(
     List<SongModel> songsToDelete, {
     void Function(int current, int total)? onProgress,
+    BuildContext? context, // Added BuildContext parameter
   }) async {
     if (songsToDelete.isEmpty) return true;
 
     // 1. Force Permission Check
     if (Platform.isAndroid) {
       debugPrint("DEBUG: Deletion check: Checking MANAGE_EXTERNAL_STORAGE...");
+      // We need a context here, but AudioProvider doesn't have it.
+      // However, physicallyDeleteSongs is called from UI which has context.
+      // We'll trust the UI to handle the explanation or pass a context if available.
+      // Let's modify physicallyDeleteSongs to accept BuildContext? No, better to keep it clean.
+      // Actually, physicallyDeleteSongs already takes onProgress. Let's add context as optional.
       final hasPermission = await _permissionService
-          .checkAndRequestFullStoragePermission();
+          .checkAndRequestFullStoragePermission(context!);
       if (!hasPermission) {
         debugPrint("DEBUG: Deletion ABORTED. Full storage access not granted.");
         return false;
