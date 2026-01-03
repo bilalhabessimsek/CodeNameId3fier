@@ -11,7 +11,7 @@ import '../player/mini_player.dart';
 import '../settings/settings_screen.dart';
 import '../settings/language_dialog.dart';
 import '../equalizer/equalizer_screen.dart';
-import 'tabs/album_tab.dart';
+import 'tabs/duplicates_tab.dart'; // Import DuplicateTab
 import 'package:modern_music_player/features/playlist/playlist_tab.dart';
 import 'tabs/genre_tab.dart';
 import 'tabs/folder_tab.dart';
@@ -149,7 +149,9 @@ class _HomeScreenState extends State<HomeScreen>
                     Tab(text: "Favoriler"),
                     Tab(text: "Çalma Listeleri"),
                     Tab(text: "Klasörler"),
-                    Tab(text: "Albüm"),
+                    Tab(
+                      text: "Tekrar Köşesi",
+                    ), // Replaced Album with Duplicate Corner
                     Tab(text: "Etiketler"),
                     Tab(text: "Sanatçılar"),
                   ],
@@ -321,49 +323,7 @@ class _HomeScreenState extends State<HomeScreen>
                       }
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.copy_all,
-                      color: Colors.orangeAccent,
-                    ),
-                    title: const Text(
-                      'Tekrar Köşesi',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      final duplicates = await Provider.of<AudioProvider>(
-                        context,
-                        listen: false,
-                      ).findDuplicateFiles();
 
-                      if (context.mounted) {
-                        if (duplicates.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Tekrarlanan dosya bulunamadı"),
-                            ),
-                          );
-                        } else {
-                          showMaintenanceDialog(
-                            context: context,
-                            title: "Tekrar Köşesi",
-                            items: duplicates,
-                            onConfirm: (selected) {
-                              _showFinalDeleteConfirmation(
-                                context,
-                                selected,
-                                Provider.of<AudioProvider>(
-                                  context,
-                                  listen: false,
-                                ),
-                              );
-                            },
-                          );
-                        }
-                      }
-                    },
-                  ),
                   ListTile(
                     leading: const Icon(Icons.bug_report, color: Colors.orange),
                     title: const Text(
@@ -441,107 +401,76 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-            body: SafeArea(
-              top: false,
-              bottom: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Main Content Area (Scoped Consumer)
-                  Expanded(
-                    child: Selector<AudioProvider, bool>(
-                      selector: (_, p) => p.isLoading || !p.hasPermission,
-                      builder: (context, shouldWait, child) {
-                        // We access provider just for checking specific flags if true
-                        final audioProvider = Provider.of<AudioProvider>(
-                          context,
-                          listen: false,
-                        );
-                        if (audioProvider.isLoading) {
-                          return const Center(
-                            child: CircularProgressIndicator(
-                              color: AppColors.primary,
-                            ),
-                          );
-                        }
-                        if (!audioProvider.hasPermission) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.lock_outline,
-                                  size: 60,
-                                  color: Colors.white54,
-                                ),
-                                const SizedBox(height: 20),
-                                const Text(
-                                  "İzin Gerekli",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                ElevatedButton(
-                                  onPressed: () => audioProvider
-                                      .checkAndRequestPermissions(),
-                                  child: const Text("İzin Ver"),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Main Content Area
+              Expanded(
+                child: Consumer<AudioProvider>(
+                  builder: (context, audioProvider, child) {
+                    if (audioProvider.isLoading) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: AppColors.primary),
+                      );
+                    }
 
-                        if (audioProvider.songs.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              "Müzik bulunamadı",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          );
-                        }
-
-                        return TabBarView(
+                    if (!audioProvider.hasPermission) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _buildSongList(context), // Şarkılar
-                            const FavoritesTab(),
-                            const PlaylistTab(),
-                            const FolderTab(),
-                            AlbumTab(audioProvider: audioProvider),
-                            GenreTab(
-                              audioProvider: audioProvider,
-                            ), // Using GenreTab for 'Tags' tab placeholder? Or needs TagTab?
-                            // Based on header: "Etiketler" is tab 5. "Genre" is "Türler" - not in header?
-                            // Wait, header tabs: Şarkılar, Favoriler, Çalma Listeleri, Klasörler, Albüm, Etiketler, Sanatçılar
-                            // The dump body TabBarView has:
-                            // _buildSongList, FavoritesTab, PlaylistTab, FolderTab, AlbumTab, GenreTab, ArtistTab
-                            // Just verify strict index mapping:
-                            // 0: Şarkılar -> _buildSongList [OK]
-                            // 1: Favoriler -> FavoritesTab [OK]
-                            // 2: Çalma L -> PlaylistTab [OK]
-                            // 3: Klasörler -> FolderTab [OK]
-                            // 4: Albüm -> AlbumTab [OK]
-                            // 5: Etiketler -> GenreTab? (Assuming GenreTab is used for Tags/Genres here) [OK]
-                            // 6: Sanatçılar -> ArtistTab [OK]
-                            ArtistTab(audioProvider: audioProvider),
+                            const Icon(
+                              Icons.lock_outline,
+                              size: 60,
+                              color: Colors.white54,
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              "İzin Gerekli",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: () => audioProvider
+                                  .checkAndRequestPermissions(),
+                              child: const Text("İzin Ver"),
+                            ),
                           ],
-                        );
-                      },
-                    ),
-                  ),
-                  // Mini Player is persistent at bottom
-                  Consumer<AudioProvider>(
-                    builder: (context, provider, child) {
-                      if (provider.currentSong != null) {
-                        return const MiniPlayer();
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                ],
+                        ),
+                      );
+                    }
+
+                    return TabBarView(
+                      children: [
+                        _buildSongList(context),
+                        const FavoritesTab(),
+                        const PlaylistTab(),
+                        const FolderTab(),
+                        const DuplicateTab(),
+                        GenreTab(audioProvider: audioProvider),
+                        ArtistTab(audioProvider: audioProvider),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
+              
+              // Mini Player
+              Consumer<AudioProvider>(
+                builder: (context, provider, child) {
+                  if (provider.currentSong != null) {
+                    return const MiniPlayer();
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
           ),
         ),
       ),
