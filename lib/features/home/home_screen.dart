@@ -878,74 +878,88 @@ class _HomeScreenState extends State<HomeScreen>
             onPressed: () async {
               Navigator.pop(context);
 
-              // 1. Progress state
-              int current = 0;
               final total = selected.length;
 
-              // 2. Show Progress Dialog
+              // Use a ValueNotifier to handle progress updates without complex dialog states
+              final progressNotifier = ValueNotifier<int>(0);
+
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => StatefulBuilder(
-                  builder: (context, setDialogState) {
-                    // Update internal state of the dialog for progress
-                    Future.microtask(() {
-                      if (context.mounted) {
-                        setDialogState(() {});
-                      }
-                    });
-
-                    return AlertDialog(
-                      backgroundColor: AppColors.surface,
-                      title: const Text(
-                        "Siliniyor...",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          LinearProgressIndicator(
-                            value: total > 0 ? current / total : 0,
-                            color: Colors.red,
-                            backgroundColor: Colors.white12,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            "$current / $total dosya temizleniyor",
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              );
-
-              // 3. Execution
-              await provider.physicallyDeleteSongs(
-                selected,
-                onProgress: (c, t) {
-                  current = c;
-                  // The dialog will rebuild via any mechanism, but since we are in a simple showDialog,
-                  // we might need a more robust way to sync if StatefulBuilder isn't enough.
-                  // However, physicallyDeleteSongs is async, so we can use a ValueNotifier or just rebuild.
+                builder: (context) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: progressNotifier,
+                    builder: (context, val, child) {
+                      return AlertDialog(
+                        backgroundColor: AppColors.surface,
+                        title: const Text(
+                          "Siliniyor...",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            LinearProgressIndicator(
+                              value: total > 0 ? val / total : 0,
+                              color: Colors.red,
+                              backgroundColor: Colors.white12,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "$val / $total dosya temizleniyor",
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              "Lütfen bekleyin, işlem devam ediyor...",
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
                 },
               );
 
-              // 4. Close Progress Dialog
+              // Execution
+              final success = await provider.physicallyDeleteSongs(
+                selected,
+                onProgress: (c, t) {
+                  progressNotifier.value = c;
+                },
+              );
+
+              // Close Progress Dialog
               if (context.mounted) {
                 Navigator.of(context, rootNavigator: true).pop();
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: Colors.green,
-                    content: Text(
-                      "${selected.length} dosya başarıyla silindi.",
-                      style: const TextStyle(color: Colors.white),
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: Colors.green,
+                      content: Text(
+                        "${selected.length} dosya başarıyla silindi.",
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
-                  ),
-                );
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Colors.orange,
+                      content: Text(
+                        "Bazı dosyalar silinemedi. İzinleri kontrol edin.",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  );
+                }
               }
+              progressNotifier.dispose();
             },
             child: const Text("EVET, KALICI OLARAK SİL"),
           ),
