@@ -288,7 +288,8 @@ class _DuplicateTabState extends State<DuplicateTab> {
                     onProgress: (c, t) => progressNotifier.value = c,
                   );
 
-                  if (mounted && Navigator.canPop(dialogContext)) {
+                  if (!mounted) return;
+                  if (Navigator.canPop(dialogContext)) {
                     Navigator.pop(dialogContext); // Close dialog
 
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -350,7 +351,7 @@ class _DuplicateTabState extends State<DuplicateTab> {
             const SizedBox(height: 8),
             Text(
               "Tekrarlayan dosya bulunamadı.",
-              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 16),
             TextButton.icon(

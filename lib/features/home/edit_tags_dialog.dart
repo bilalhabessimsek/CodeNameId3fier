@@ -75,7 +75,7 @@ class _EditTagsDialogState extends State<EditTagsDialog> {
               genre: _genreController.text,
             );
 
-            if (!mounted) return;
+            if (!context.mounted) return;
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -129,7 +129,7 @@ class _EditTagsDialogState extends State<EditTagsDialog> {
             );
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
+            backgroundColor: Colors.green,
             foregroundColor: Colors.white,
           ),
           child: const Text("Kaydet"),

@@ -1,8 +1,8 @@
 // ignore_for_file: avoid_print
-import 'dart:io';
+// import 'dart:io'; // Unused
 
 void main() {
-  final dir = Directory.current;
+  // final dir = Directory.current; // Unused
   // final libDir = Directory('${dir.path}/lib'); // Unused
   // ... rest of file (overwriting with ignore) - Wait, I shouldn't overwrite if I don't know content.
   // I will just PREPEND. check_enums.dart seems small.

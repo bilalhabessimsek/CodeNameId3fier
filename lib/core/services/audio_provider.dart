@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
@@ -13,8 +14,6 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
-
-import 'package:flutter/foundation.dart';
 
 // Diğer servisler
 import 'tag_editor_service.dart';
@@ -184,7 +183,7 @@ class AudioProvider extends ChangeNotifier {
 
     // Şarkı Değişimi (Playlist takibi)
     _audioPlayer.sequenceStateStream.listen((sequenceState) {
-      final source = sequenceState?.currentSource;
+      final source = sequenceState.currentSource;
       if (source == null) return;
 
       final tag = source.tag;
@@ -329,6 +328,7 @@ class AudioProvider extends ChangeNotifier {
     if (shuffle) {
       // Toggle shuffle if not enabled, or force ensure it is enabled?
       if (!_isShuffleMode) toggleShuffle();
+      initialIndex = Random().nextInt(songs.length);
     }
     if (songs.isEmpty) return;
 
@@ -580,8 +580,9 @@ class AudioProvider extends ChangeNotifier {
               if (p.endsWith('.mid') || p.endsWith('.midi')) {
                 int id = entity.path.hashCode;
                 String title = entity.uri.pathSegments.last;
-                if (title.contains('.'))
+                if (title.contains('.')) {
                   title = title.substring(0, title.lastIndexOf('.'));
+                }
                 midiSongs.add(
                   SongModel({
                     "_id": id,
@@ -678,7 +679,9 @@ class AudioProvider extends ChangeNotifier {
   }
 
   Future<void> addSongsToPlaylist(int playlistId, List<int> songIds) async {
-    for (var id in songIds) await _audioQuery.addToPlaylist(playlistId, id);
+    for (var id in songIds) {
+      await _audioQuery.addToPlaylist(playlistId, id);
+    }
     await fetchPlaylists();
   }
 
@@ -698,7 +701,9 @@ class AudioProvider extends ChangeNotifier {
       final p = _playlists.firstWhere(
         (element) => element.playlist == genre.genre,
       );
-      for (var song in s) await _audioQuery.addToPlaylist(p.id, song.id);
+      for (var song in s) {
+        await _audioQuery.addToPlaylist(p.id, song.id);
+      }
       await fetchPlaylists();
     }
     _isLoading = false;
@@ -715,7 +720,9 @@ class AudioProvider extends ChangeNotifier {
       final p = _playlists.firstWhere(
         (element) => element.playlist == album.album,
       );
-      for (var song in s) await _audioQuery.addToPlaylist(p.id, song.id);
+      for (var song in s) {
+        await _audioQuery.addToPlaylist(p.id, song.id);
+      }
       await fetchPlaylists();
     }
     _isLoading = false;
@@ -732,7 +739,9 @@ class AudioProvider extends ChangeNotifier {
       final p = _playlists.firstWhere(
         (element) => element.playlist == artist.artist,
       );
-      for (var song in s) await _audioQuery.addToPlaylist(p.id, song.id);
+      for (var song in s) {
+        await _audioQuery.addToPlaylist(p.id, song.id);
+      }
       await fetchPlaylists();
     }
     _isLoading = false;
@@ -773,10 +782,11 @@ class AudioProvider extends ChangeNotifier {
   }
 
   void toggleSelection(int id) {
-    if (_selectedSongIds.contains(id))
+    if (_selectedSongIds.contains(id)) {
       _selectedSongIds.remove(id);
-    else
+    } else {
       _selectedSongIds.add(id);
+    }
     notifyListeners();
   }
 
@@ -801,7 +811,9 @@ class AudioProvider extends ChangeNotifier {
     _songs.where((s) => _selectedSongIds.contains(s.id)).toList(),
   );
   Future<void> addSelectedToPlaylist(int pid) async {
-    for (var id in _selectedSongIds) await addToPlaylist(pid, id);
+    for (var id in _selectedSongIds) {
+      await addToPlaylist(pid, id);
+    }
     _isSelectionMode = false;
     _selectedSongIds.clear();
     notifyListeners();
@@ -915,7 +927,7 @@ class AudioProvider extends ChangeNotifier {
       debugPrint("DEBUG: Releasing file locks for deletion...");
       await _audioPlayer.stop();
       await _midiPlayer.stop();
-      await _audioPlayer.setAudioSource(ConcatenatingAudioSource(children: []));
+      await _audioPlayer.setAudioSources([]);
       _isPlaying = false;
       _currentSong = null;
       notifyListeners();
@@ -1021,10 +1033,11 @@ class AudioProvider extends ChangeNotifier {
   Future<void> loadLostHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final h = prefs.getString('lost_songs_history');
-    if (h != null)
+    if (h != null) {
       _lostSongsHistory = List<Map<String, String>>.from(
         jsonDecode(h).map((x) => Map<String, String>.from(x)),
       );
+    }
     notifyListeners();
   }
 

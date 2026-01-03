@@ -29,29 +29,44 @@ class SongListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final audioProvider = Provider.of<AudioProvider>(context);
-    final isPlaying = audioProvider.currentSong?.id == song.id;
+    // Optimized: Use context.select to listen only to specific changes
+    // instead of rebuilding specifically on every notifyListeners().
+    final isPlaying = context.select<AudioProvider, bool>(
+      (p) => p.currentSong?.id == song.id,
+    );
+    final isFavorite = context.select<AudioProvider, bool>(
+      (p) => p.isFavorite(song.id),
+    );
+    final isSelectionMode = context.select<AudioProvider, bool>(
+      (p) => p.isSelectionMode,
+    );
+    final isSelected = context.select<AudioProvider, bool>(
+      (p) => p.selectedSongIds.contains(song.id),
+    );
+
+    // We use context.read for callbacks to avoid listening
+    final providerRead = context.read<AudioProvider>();
 
     Widget content = ListTile(
-      leading: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: AppColors.surfaceLight,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: QueryArtworkWidget(
-            id: song.id,
-            type: ArtworkType.AUDIO,
-            keepOldArtwork: true,
-            format: ArtworkFormat.JPEG,
-            size: 100,
-            nullArtworkWidget: const Center(
-              child: Icon(Icons.music_note, color: AppColors.textSecondary),
-            ),
+      leading: QueryArtworkWidget(
+        id: song.id,
+        type: ArtworkType.AUDIO,
+        keepOldArtwork: true,
+        format: ArtworkFormat.JPEG,
+        size: 100, // Small enough for list, large enough for 2x pixel density
+        quality: 50,
+        artworkWidth: 50,
+        artworkHeight: 50,
+        artworkBorder: BorderRadius.circular(8), // Clips natively
+        artworkFit: BoxFit.cover,
+        nullArtworkWidget: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: const Icon(Icons.music_note, color: AppColors.textSecondary),
         ),
       ),
       title: Text(
@@ -74,16 +89,12 @@ class SongListTile extends StatelessWidget {
         children: [
           IconButton(
             icon: Icon(
-              audioProvider.isFavorite(song.id)
-                  ? Icons.favorite
-                  : Icons.favorite_border,
-              color: audioProvider.isFavorite(song.id)
-                  ? AppColors.primary
-                  : AppColors.textSecondary,
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? AppColors.primary : AppColors.textSecondary,
               size: 20,
             ),
             onPressed: () {
-              audioProvider.toggleFavorite(song.id);
+              providerRead.toggleFavorite(song.id);
             },
           ),
           PopupMenuButton<String>(
@@ -107,7 +118,8 @@ class SongListTile extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const CloudIdentifyScreen(),
+                    builder: (context) =>
+                        CloudIdentifyScreen(initialSong: song),
                   ),
                 );
               } else if (value == 'edit_offline') {
@@ -116,7 +128,7 @@ class SongListTile extends StatelessWidget {
                   builder: (context) => EditTagsDialog(song: song),
                 );
               } else if (value == 'delete_physically') {
-                _confirmDelete(context, audioProvider, song);
+                _confirmDelete(context, providerRead, song);
               } else if (value == 'add_to_playlist') {
                 if (onAddToPlaylist != null) {
                   onAddToPlaylist!(song.id);
@@ -185,17 +197,17 @@ class SongListTile extends StatelessWidget {
           onTap ??
           () {
             debugPrint("DEBUG: SongListTile: Tapped song ${song.title}");
-            audioProvider.playSong(song);
+            providerRead.playSong(song);
           },
     );
 
-    if (audioProvider.isSelectionMode) {
+    if (isSelectionMode) {
       content = Container(
         margin: const EdgeInsets.only(bottom: 8),
         child: CheckboxListTile(
-          value: audioProvider.selectedSongIds.contains(song.id),
+          value: isSelected,
           activeColor: AppColors.primary,
-          onChanged: (value) => audioProvider.toggleSelection(song.id),
+          onChanged: (value) => providerRead.toggleSelection(song.id),
           title: Text(
             song.title,
             maxLines: 1,
@@ -218,8 +230,8 @@ class SongListTile extends StatelessWidget {
         if (onSelectionStart != null && index != null) {
           onSelectionStart!(details, index!);
         } else {
-          audioProvider.toggleSelectionMode();
-          audioProvider.toggleSelection(song.id);
+          providerRead.toggleSelectionMode();
+          providerRead.toggleSelection(song.id);
         }
       },
       onLongPressMoveUpdate: onSelectionUpdate,

@@ -219,7 +219,7 @@ class _OnlineMetadataScreenState extends State<OnlineMetadataScreen> {
                             ),
                           );
 
-                          if (!mounted) return;
+                          if (!context.mounted) return;
 
                           if (confirm == true) {
                             setState(() => _isLoading = true);
@@ -232,7 +232,7 @@ class _OnlineMetadataScreenState extends State<OnlineMetadataScreen> {
                               genre: primaryGenre,
                               coverUrl: coverUrl,
                             );
-                            if (!mounted) return;
+                            if (!context.mounted) return;
                             setState(() => _isLoading = false);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

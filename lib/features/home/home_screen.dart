@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -13,6 +12,7 @@ import '../settings/language_dialog.dart';
 import '../equalizer/equalizer_screen.dart';
 import 'tabs/duplicates_tab.dart'; // Import DuplicateTab
 import 'package:modern_music_player/features/playlist/playlist_tab.dart';
+import 'batch_auto_tag_screen.dart';
 import 'tabs/genre_tab.dart';
 import 'tabs/folder_tab.dart';
 import 'tabs/favorites_tab.dart';
@@ -24,6 +24,7 @@ import '../../core/widgets/song_list_tile.dart';
 import '../../core/widgets/maintenance_selection_dialog.dart';
 import '../playlist/playlist_picker.dart';
 import 'cloud_identify_screen.dart';
+import 'failed_scans_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -127,7 +128,20 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ),
               ),
-              actions: const [],
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.auto_fix_high, color: Colors.white),
+                  tooltip: "Otomatik Düzenleyici",
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BatchAutoTagScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(50),
                 child: TabBar(
@@ -327,49 +341,17 @@ class _HomeScreenState extends State<HomeScreen>
                   ListTile(
                     leading: const Icon(Icons.bug_report, color: Colors.orange),
                     title: const Text(
-                      'Hasarlı Dosyaları Bul',
+                      'Taranamayan Dosyalar',
                       style: TextStyle(color: Colors.white),
                     ),
-                    onTap: () async {
+                    onTap: () {
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            "Derin tarama yapılıyor... (Bu işlem biraz sürebilir)",
-                          ),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const FailedScansScreen(),
                         ),
                       );
-
-                      final corruptFiles = await Provider.of<AudioProvider>(
-                        context,
-                        listen: false,
-                      ).detectCorruptFiles();
-
-                      if (context.mounted) {
-                        if (corruptFiles.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Bozuk dosya bulunamadı"),
-                            ),
-                          );
-                        } else {
-                          showMaintenanceDialog(
-                            context: context,
-                            title: "Bozuk Dosyalar",
-                            items: corruptFiles,
-                            onConfirm: (selected) {
-                              _showFinalDeleteConfirmation(
-                                context,
-                                selected,
-                                Provider.of<AudioProvider>(
-                                  context,
-                                  listen: false,
-                                ),
-                              );
-                            },
-                          );
-                        }
-                      }
                     },
                   ),
                   ListTile(
@@ -401,286 +383,161 @@ class _HomeScreenState extends State<HomeScreen>
                 ],
               ),
             ),
-        body: SafeArea(
-          top: false,
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Main Content Area
-              Expanded(
-                child: Consumer<AudioProvider>(
-                  builder: (context, audioProvider, child) {
-                    if (audioProvider.isLoading) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
-                      );
-                    }
+            body: SafeArea(
+              top: false,
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Main Content Area
+                  Expanded(
+                    child:
+                        Selector<
+                          AudioProvider,
+                          ({bool isLoading, bool hasPermission})
+                        >(
+                          selector: (_, provider) => (
+                            isLoading: provider.isLoading,
+                            hasPermission: provider.hasPermission,
+                          ),
+                          builder: (context, data, child) {
+                            if (data.isLoading) {
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primary,
+                                ),
+                              );
+                            }
 
-                    if (!audioProvider.hasPermission) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.lock_outline,
-                              size: 60,
-                              color: Colors.white54,
-                            ),
-                            const SizedBox(height: 20),
-                            const Text(
-                              "İzin Gerekli",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                              onPressed: () => audioProvider
-                                  .checkAndRequestPermissions(),
-                              child: const Text("İzin Ver"),
-                            ),
-                          ],
+                            if (!data.hasPermission) {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.lock_outline,
+                                      size: 60,
+                                      color: Colors.white54,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    const Text(
+                                      "İzin Gerekli",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Provider.of<AudioProvider>(
+                                            context,
+                                            listen: false,
+                                          ).checkAndRequestPermissions(),
+                                      child: const Text("İzin Ver"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final audioProvider = Provider.of<AudioProvider>(
+                              context,
+                              listen: false,
+                            );
+
+                            return TabBarView(
+                              children: [
+                                _buildSongList(context),
+                                const FavoritesTab(),
+                                const PlaylistTab(),
+                                const FolderTab(),
+                                const DuplicateTab(),
+                                GenreTab(audioProvider: audioProvider),
+                                ArtistTab(audioProvider: audioProvider),
+                              ],
+                            );
+                          },
                         ),
-                      );
-                    }
+                  ),
 
-                    return TabBarView(
-                      children: [
-                        _buildSongList(context),
-                        const FavoritesTab(),
-                        const PlaylistTab(),
-                        const FolderTab(),
-                        const DuplicateTab(),
-                        GenreTab(audioProvider: audioProvider),
-                        ArtistTab(audioProvider: audioProvider),
-                      ],
-                    );
-                  },
-                ),
+                  // Mini Player
+                  Selector<AudioProvider, bool>(
+                    selector: (_, provider) => provider.currentSong != null,
+                    builder: (context, hasSong, child) {
+                      if (hasSong) {
+                        return const MiniPlayer();
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
               ),
-              
-              // Mini Player
-              Consumer<AudioProvider>(
-                builder: (context, provider, child) {
-                  if (provider.currentSong != null) {
-                    return const MiniPlayer();
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+            ), // SafeArea
+          ), // Scaffold
+        ), // GradientBackground
+      ), // DefaultTabController
+    ); // PopScope
   }
 
   Widget _buildSongList(BuildContext context) {
-    return Consumer<AudioProvider>(
-      builder: (context, audioProvider, child) {
-        // Selection Mode Bottom Bar logic could be here or above,
-        // but 'Scaffold' bottomSheet is alternative.
-        // For now adhering to design.
+    // We use a Column but the children need different listening strategies.
+    return Column(
+      children: [
+        // 1. Selection & Play Controls - specific listeners
+        _buildTopControls(context),
 
-        return Column(
-          children: [
-            // Selection Control Bar
-            if (audioProvider.isSelectionMode)
-              Container(
-                color: AppColors.primary,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      "${audioProvider.selectedSongIds.length} Seçildi",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.playlist_add, color: Colors.white),
-                      onPressed: () {
-                        showPlaylistPicker(
-                          context,
-                          audioProvider,
-                          // No single ID passed means use selected
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.white),
-                      onPressed: () {
-                        _showFinalDeleteConfirmation(
-                          context,
-                          audioProvider.songs
-                              .where(
-                                (s) => audioProvider.selectedSongIds.contains(
-                                  s.id,
-                                ),
-                              )
-                              .toList(),
-                          audioProvider,
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.select_all, color: Colors.white),
-                      onPressed: () {
-                        audioProvider.addSongsToSelection(
-                          audioProvider.songs.map((e) => e.id).toList(),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-            if (!audioProvider.isSelectionMode)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      "${audioProvider.songs.length} Şarkı",
-                      style: const TextStyle(color: Colors.white54),
-                    ),
-                    const Spacer(),
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      child: Row(
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              if (audioProvider.songs.isNotEmpty) {
-                                audioProvider.playSongList(
-                                  audioProvider.songs,
-                                  initialIndex: 0,
-                                  shuffle: false,
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.play_arrow, size: 18),
-                            label: const Text(
-                              "Oynat",
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              elevation: 4,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              if (audioProvider.songs.isNotEmpty) {
-                                audioProvider.playSongList(
-                                  audioProvider.songs,
-                                  shuffle: true,
-                                );
-                              }
-                            },
-                            icon: const Icon(Icons.shuffle, size: 18),
-                            label: const Text(
-                              "Karıştır",
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.surfaceLight,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: const BorderSide(
-                                  color: AppColors.primary,
-                                  width: 1,
-                                ),
-                              ),
-                              elevation: 4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.sort, color: AppColors.primary),
-                      onPressed: () => _showSortDialog(context),
-                    ),
-                  ],
-                ),
-              ),
-
-            Expanded(
-              child: Listener(
-                onPointerDown: (event) => handleDragStart(event.localPosition),
-                onPointerMove: (event) {
-                  final RenderBox? box =
-                      context.findRenderObject() as RenderBox?;
-                  // Fix: Only trigger selection drag if we are explicitly in "dragging selection" mode.
-                  // This allows normal scrolling without selecting everything.
-                  if (box != null && audioProvider.isDraggingSelection) {
-                    handleDragUpdate(event.localPosition, box.size.height);
-                  }
-                },
-                onPointerUp: (_) {
-                  handleDragEnd();
-                  // Also ensure we reset the provider's dragging state
-                  audioProvider.setDraggingSelection(false);
-                },
-                child: ListView.builder(
+        // 2. The Song List - Listens ONLY to the list of songs
+        Expanded(
+          child: Listener(
+            onPointerDown: (event) => handleDragStart(event.localPosition),
+            onPointerMove: (event) {
+              final RenderBox? box = context.findRenderObject() as RenderBox?;
+              // Access provider without listening or use select if needed
+              final isDragging = context
+                  .read<AudioProvider>()
+                  .isDraggingSelection;
+              if (box != null && isDragging) {
+                handleDragUpdate(event.localPosition, box.size.height);
+              }
+            },
+            onPointerUp: (_) {
+              handleDragEnd();
+              context.read<AudioProvider>().setDraggingSelection(false);
+            },
+            child: Selector<AudioProvider, List<SongModel>>(
+              selector: (_, provider) => provider.songs,
+              shouldRebuild: (prev, next) =>
+                  prev != next, // Simple output check
+              builder: (context, songs, child) {
+                return ListView.builder(
                   controller: _scrollController,
-                  padding: EdgeInsets.only(bottom: 100), // Space for MiniPlayer
-                  itemCount: audioProvider.songs.length,
+                  padding: const EdgeInsets.only(bottom: 100),
+                  // Fix: itemExtent significantly improves scrolling performance
+                  // by forcing a fixed height for every item, skipping layout calcs.
+                  itemExtent: 72.0,
+                  itemCount: songs.length,
                   itemBuilder: (context, index) {
-                    final song = audioProvider.songs[index];
-                    final isSelected = audioProvider.selectedSongIds.contains(
-                      song.id,
-                    );
+                    final song = songs[index];
                     return SongListTile(
                       song: song,
                       index: index,
-                      // Fix: Click to select logic
                       onTap: () {
-                        if (audioProvider.isSelectionMode) {
-                          audioProvider.toggleSelection(song.id);
+                        final provider = context.read<AudioProvider>();
+                        if (provider.isSelectionMode) {
+                          provider.toggleSelection(song.id);
                         } else {
-                          audioProvider.playSong(song);
+                          provider.playSong(song);
                         }
                       },
                       onSelectionStart: (details, idx) {
-                        // Start selection mode if not already
-                        if (!audioProvider.isSelectionMode) {
-                          audioProvider.toggleSelectionMode();
+                        final provider = context.read<AudioProvider>();
+                        if (!provider.isSelectionMode) {
+                          provider.toggleSelectionMode();
                         }
                         dragStartIndex = idx;
-                        audioProvider.setDraggingSelection(true);
-                        audioProvider.toggleSelection(song.id);
+                        provider.setDraggingSelection(true);
+                        provider.toggleSelection(song.id);
                       },
                       onSelectionUpdate: (details) {
                         // Handled by Listener above via Mixin
@@ -688,17 +545,162 @@ class _HomeScreenState extends State<HomeScreen>
                       onSelectionEnd: handleDragEnd,
                       onAddToPlaylist: (id) => showPlaylistPicker(
                         context,
-                        audioProvider,
+                        context.read<AudioProvider>(), // Use read
                         songId: id,
                       ),
                     );
                   },
-                ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTopControls(BuildContext context) {
+    // This part listens to selection mode changes
+    final isSelectionMode = context.select<AudioProvider, bool>(
+      (p) => p.isSelectionMode,
+    );
+    final selectedCount = context.select<AudioProvider, int>(
+      (p) => p.selectedSongIds.length,
+    );
+    final songCount = context.select<AudioProvider, int>((p) => p.songs.length);
+
+    // Audio Provider read instance for actions
+    final audioProvider = context.read<AudioProvider>();
+
+    if (isSelectionMode) {
+      return Container(
+        color: AppColors.primary,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Text(
+              "$selectedCount Seçildi",
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
               ),
             ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.playlist_add, color: Colors.white),
+              onPressed: () {
+                showPlaylistPicker(context, audioProvider);
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.white),
+              onPressed: () {
+                _showFinalDeleteConfirmation(
+                  context,
+                  audioProvider.songs
+                      .where(
+                        (s) => audioProvider.selectedSongIds.contains(s.id),
+                      )
+                      .toList(),
+                  audioProvider,
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.select_all, color: Colors.white),
+              onPressed: () {
+                audioProvider.addSongsToSelection(
+                  audioProvider.songs.map((e) => e.id).toList(),
+                );
+              },
+            ),
           ],
-        );
-      },
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Text(
+            "$songCount Şarkı",
+            style: const TextStyle(color: Colors.white54),
+          ),
+          const Spacer(),
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Access fresh list just in time
+                    final songs = context.read<AudioProvider>().songs;
+                    if (songs.isNotEmpty) {
+                      audioProvider.playSongList(
+                        songs,
+                        initialIndex: 0,
+                        shuffle: false,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.play_arrow, size: 18),
+                  label: const Text(
+                    "Oynat",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    elevation: 4,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final songs = context.read<AudioProvider>().songs;
+                    if (songs.isNotEmpty) {
+                      audioProvider.playSongList(songs, shuffle: true);
+                    }
+                  },
+                  icon: const Icon(Icons.shuffle, size: 18),
+                  label: const Text(
+                    "Karıştır",
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.surfaceLight,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: const BorderSide(
+                        color: AppColors.primary,
+                        width: 1,
+                      ),
+                    ),
+                    elevation: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.sort, color: AppColors.primary),
+            onPressed: () => _showSortDialog(context),
+          ),
+        ],
+      ),
     );
   }
 

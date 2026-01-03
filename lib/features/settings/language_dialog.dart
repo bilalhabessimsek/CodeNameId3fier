@@ -1,3 +1,4 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 
@@ -27,7 +28,6 @@ class _LanguageDialogState extends State<LanguageDialog> {
   }
 
   Widget _buildLanguageOption(String language) {
-    // ignore: deprecated_member_use
     return RadioListTile<String>(
       title: Text(language, style: const TextStyle(color: Colors.white)),
       value: language,

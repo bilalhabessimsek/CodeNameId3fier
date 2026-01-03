@@ -10,7 +10,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/widgets/gradient_background.dart';
 
 class CloudIdentifyScreen extends StatefulWidget {
-  const CloudIdentifyScreen({super.key});
+  final SongModel? initialSong;
+
+  const CloudIdentifyScreen({super.key, this.initialSong});
 
   @override
   State<CloudIdentifyScreen> createState() => _CloudIdentifyScreenState();
@@ -19,6 +21,7 @@ class CloudIdentifyScreen extends StatefulWidget {
 class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
   final CloudRecognitionService _cloudService = CloudRecognitionService();
   final TagEditorService _tagService = TagEditorService();
+  final TextEditingController _searchController = TextEditingController();
 
   bool _isIdentifying = false;
   bool _isSaving = false;
@@ -26,6 +29,23 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
   SongModel? _selectedSong;
   String? _lastError;
   String? _fallbackCoverUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialSong != null) {
+      // Small delay to allow UI to build first
+      Future.delayed(Duration.zero, () {
+        _startIdentification(widget.initialSong!);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _startIdentification(SongModel song) async {
     setState(() {
@@ -146,7 +166,14 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
   @override
   Widget build(BuildContext context) {
     final audioProvider = Provider.of<AudioProvider>(context);
-    final songs = audioProvider.songs;
+    // Filter songs based on search text
+    final List<SongModel> songs = _searchController.text.isEmpty
+        ? audioProvider.songs
+        : audioProvider.songs.where((song) {
+            final query = _searchController.text.toLowerCase();
+            return song.title.toLowerCase().contains(query) ||
+                (song.artist?.toLowerCase().contains(query) ?? false);
+          }).toList();
 
     return GradientBackground(
       child: Scaffold(
@@ -154,15 +181,36 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: const Text(
-            "AI Tanımlama Merkezi",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+          titleSpacing: 0,
           leading: const BackButton(color: Colors.white),
+          title: Container(
+            height: 40,
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(color: Colors.white),
+              onChanged: (value) => setState(() {}),
+              decoration: const InputDecoration(
+                hintText: "Şarkı Ara...",
+                hintStyle: TextStyle(color: Colors.white54),
+                prefixIcon: Icon(Icons.search, color: Colors.white54, size: 20),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+              ),
+            ),
+          ),
         ),
         body: Column(
           children: [
             // Status/Result Card with Animation
+            // Moved up slightly by padding logic and reduced margins
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
               transitionBuilder: (Widget child, Animation<double> animation) {
@@ -175,18 +223,18 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
             ),
 
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 5),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Row(
                   children: [
-                    Icon(Icons.library_music, color: Colors.white38, size: 20),
+                    Icon(Icons.library_music, color: Colors.white38, size: 18),
                     SizedBox(width: 8),
                     Text(
                       "Kütüphaneden Seç",
                       style: TextStyle(
                         color: Colors.white70,
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -205,10 +253,10 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
                       _selectedSong?.id == song.id && _isIdentifying;
 
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 8), // Reduced margin
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isCurrentlyProcessing
                             ? AppColors.primary
@@ -216,15 +264,26 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
                       ),
                     ),
                     child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 0,
+                      ),
+                      dense: true, // Make list items more compact
                       onTap: _isIdentifying || _isSaving
                           ? null
                           : () => _startIdentification(song),
                       leading: QueryArtworkWidget(
                         id: song.id,
                         type: ArtworkType.AUDIO,
+                        keepOldArtwork: true,
+                        size: 50,
+                        artworkWidth: 40,
+                        artworkHeight: 40,
+                        artworkBorder: BorderRadius.circular(6),
                         nullArtworkWidget: const Icon(
                           Icons.music_note,
                           color: Colors.white54,
+                          size: 24,
                         ),
                       ),
                       title: Text(
@@ -232,18 +291,23 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
                         song.artist ?? "Bilinmeyen Sanatçı",
-                        style: const TextStyle(color: Colors.white60),
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
                       ),
                       trailing: isCurrentlyProcessing
                           ? const SizedBox(
-                              width: 20,
-                              height: 20,
+                              width: 16,
+                              height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: AppColors.primary,
@@ -252,6 +316,7 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
                           : const Icon(
                               Icons.cloud_upload_outlined,
                               color: AppColors.primary,
+                              size: 20,
                             ),
                     ),
                   );
@@ -278,30 +343,31 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
 
     return Container(
       key: ValueKey(stateKey),
-      constraints: const BoxConstraints(minHeight: 180),
-      padding: const EdgeInsets.all(24),
-      margin: const EdgeInsets.all(16),
+      // Reduced minHeight and margins to make it tighter and visually higher
+      constraints: const BoxConstraints(minHeight: 140),
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       decoration: BoxDecoration(
         color: AppColors.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isSuccess
               ? Colors.green.withValues(alpha: 0.3)
               : Colors.white12,
-          width: 2,
+          width: 1.5,
         ),
         boxShadow: [
           if (isSuccess)
             BoxShadow(
-              color: Colors.green.withValues(alpha: 0.2),
-              blurRadius: 30,
-              spreadRadius: 5,
+              color: Colors.green.withValues(alpha: 0.15),
+              blurRadius: 20,
+              spreadRadius: 2,
             )
           else if (_isIdentifying)
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              blurRadius: 20,
-              spreadRadius: 2,
+              color: AppColors.primary.withValues(alpha: 0.2),
+              blurRadius: 15,
+              spreadRadius: 1,
             ),
         ],
       ),
@@ -495,7 +561,7 @@ class _CloudIdentifyScreenState extends State<CloudIdentifyScreen> {
             icon: const Icon(Icons.refresh),
             label: const Text("Tekrar Dene"),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary.withOpacity(0.2),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.2),
               foregroundColor: Colors.white,
             ),
           ),

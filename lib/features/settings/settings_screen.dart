@@ -5,6 +5,7 @@ import 'package:image_cropper/image_cropper.dart';
 import '../../core/theme/app_colors.dart';
 import '../equalizer/equalizer_screen.dart';
 import '../../core/services/theme_provider.dart';
+import '../../core/services/scan_history_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -105,6 +106,54 @@ class SettingsScreen extends StatelessWidget {
                       content: Text('Varsayılan tema geri yüklendi!'),
                     ),
                   );
+                },
+              ),
+              const SizedBox(height: 16),
+              _buildSettingItem(
+                context,
+                icon: Icons.cleaning_services,
+                title: 'Tarama Geçmişini Temizle',
+                subtitle: 'Taranan şarkıların kaydını sil',
+                onTap: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      backgroundColor: AppColors.surface,
+                      title: const Text(
+                        "Geçmişi Temizle?",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      content: const Text(
+                        "Daha önce taranmış şarkıların kaydı silinecek ve toplu taramada tekrar listelenecekler.",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text("Vazgeç"),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text(
+                            "Temizle",
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmed == true && context.mounted) {
+                    final history = await ScanHistoryService.init();
+                    await history.clearHistory();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Tarama geçmişi temizlendi! 🧹"),
+                        ),
+                      );
+                    }
+                  }
                 },
               ),
             ],
