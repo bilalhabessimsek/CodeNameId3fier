@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
@@ -883,18 +884,28 @@ class AudioProvider extends ChangeNotifier {
   }) async {
     if (songsToDelete.isEmpty) return true;
 
-    // 1. Force Permission Check
-    if (Platform.isAndroid) {
-      debugPrint("DEBUG: Deletion check: Checking MANAGE_EXTERNAL_STORAGE...");
-      // We need a context here, but AudioProvider doesn't have it.
-      // However, physicallyDeleteSongs is called from UI which has context.
-      // We'll trust the UI to handle the explanation or pass a context if available.
-      // Let's modify physicallyDeleteSongs to accept BuildContext? No, better to keep it clean.
-      // Actually, physicallyDeleteSongs already takes onProgress. Let's add context as optional.
+    debugPrint(
+      "DEBUG: physicallyDeleteSongs: Starting for ${songsToDelete.length} songs.",
+    );
+
+    // 1. Force Permission Check (Only if context is provided and mounted)
+    if (Platform.isAndroid && context != null && context.mounted) {
+      debugPrint(
+        "DEBUG: physicallyDeleteSongs: Checking permissions with context.",
+      );
       final hasPermission = await _permissionService
-          .checkAndRequestFullStoragePermission(context!);
+          .checkAndRequestFullStoragePermission(context);
       if (!hasPermission) {
-        debugPrint("DEBUG: Deletion ABORTED. Full storage access not granted.");
+        debugPrint("DEBUG: physicallyDeleteSongs: ABORTED. Permission denied.");
+        return false;
+      }
+    } else if (Platform.isAndroid) {
+      // Fallback for no context: check current status only
+      final status = await ph.Permission.manageExternalStorage.status;
+      if (!status.isGranted) {
+        debugPrint(
+          "DEBUG: physicallyDeleteSongs: ABORTED. No permission and no context to ask.",
+        );
         return false;
       }
     }

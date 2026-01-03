@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import '../../core/services/audio_provider.dart';
@@ -843,137 +845,118 @@ class _HomeScreenState extends State<HomeScreen>
     List<SongModel> selected,
     AudioProvider provider,
   ) {
+    // 0: State Switcher - false = Warning, true = Deletion in progress
+    final isDeletingNotifier = ValueNotifier<bool>(false);
+    final progressNotifier = ValueNotifier<int>(0);
+    final total = selected.length;
+
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.black,
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(color: Colors.red, width: 2),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 30),
-            SizedBox(width: 10),
-            Text(
-              "SON UYARI!",
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Text(
-          "${selected.length} adet müzik dosyası telefonunuzdan TAMAMEN SİLİNECEKTİR.\n\nEmin misiniz?",
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "HAYIR, VAZGEÇ",
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              debugPrint(
-                "DEBUG: Bulk delete button pressed. Items to delete: ${selected.length}",
-              );
-              Navigator.pop(dialogContext); // Close confirmation dialog
-
-              final total = selected.length;
-
-              // Use a ValueNotifier to handle progress updates without complex dialog states
-              final progressNotifier = ValueNotifier<int>(0);
-
-              showDialog(
-                context: context, // Use screen context
-                barrierDismissible: false,
-                builder: (progressDialogContext) {
-                  return ValueListenableBuilder<int>(
-                    valueListenable: progressNotifier,
-                    builder: (pCtx, val, child) {
-                      return AlertDialog(
-                        backgroundColor: AppColors.surface,
-                        title: const Text(
-                          "Siliniyor...",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            LinearProgressIndicator(
-                              value: total > 0 ? val / total : 0,
-                              color: Colors.red,
-                              backgroundColor: Colors.white12,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              "$val / $total dosya temizleniyor",
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Lütfen bekleyin, işlem devam ediyor...",
-                              style: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-
-              // 3. Execution
-              final bool success = await provider.physicallyDeleteSongs(
-                selected,
-                context: context, // Pass screen context
-                onProgress: (c, t) {
-                  progressNotifier.value = c;
-                },
-              );
-
-              // Close Progress Dialog
-              if (context.mounted) {
-                Navigator.of(
-                  context,
-                  rootNavigator: true,
-                ).pop(); // Progress dialog
-
-                // ALSO CLOSE the maintenance dialog (Tekrar Köşesi/Merhumlar Konağı)
-                Navigator.of(context).pop();
-
-                if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: Colors.green,
-                      content: Text(
-                        "${selected.length} dosya başarıyla silindi.",
-                        style: const TextStyle(color: Colors.white),
+      barrierDismissible: false,
+      builder: (dialogContext) => ValueListenableBuilder<bool>(
+        valueListenable: isDeletingNotifier,
+        builder: (context, isDeleting, child) {
+          if (isDeleting) {
+            // PROGRESS UI
+            return ValueListenableBuilder<int>(
+              valueListenable: progressNotifier,
+              builder: (context, val, child) {
+                return AlertDialog(
+                  backgroundColor: AppColors.surface,
+                  title: const Text(
+                    "Siliniyor...",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LinearProgressIndicator(
+                        value: total > 0 ? val / total : 0,
+                        color: Colors.red,
+                        backgroundColor: Colors.white12,
                       ),
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: Colors.orange,
-                      content: Text(
-                        "Bazı dosyalar silinemedi veya işlem iptal edildi.",
-                        style: TextStyle(color: Colors.white),
+                      const SizedBox(height: 16),
+                      Text(
+                        "$val / $total dosya temizleniyor",
+                        style: const TextStyle(color: Colors.white70),
                       ),
-                    ),
+                    ],
+                  ),
+                );
+              },
+            );
+          }
+
+          // WARNING UI
+          return AlertDialog(
+            backgroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              side: const BorderSide(color: Colors.red, width: 2),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.red, size: 30),
+                SizedBox(width: 10),
+                Text(
+                  "SON UYARI!",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              "${selected.length} adet müzik dosyası telefonunuzdan TAMAMEN SİLİNECEKTİR.\n\nEmin misiniz?",
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text(
+                  "HAYIR, VAZGEÇ",
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () async {
+                  debugPrint("DEBUG: Bulk delete STARTING for $total items.");
+                  isDeletingNotifier.value = true;
+
+                  final bool success = await provider.physicallyDeleteSongs(
+                    selected,
+                    context: dialogContext,
+                    onProgress: (c, t) => progressNotifier.value = c,
                   );
-                }
-              }
-              progressNotifier.dispose();
-            },
-            child: const Text("EVET, KALICI OLARAK SİL"),
-          ),
-        ],
+
+                  if (context.mounted) {
+                    Navigator.pop(dialogContext); // Close the ONLY dialog
+
+                    // Also close maintenance dialog
+                    if (Navigator.canPop(context)) Navigator.pop(context);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: success ? Colors.green : Colors.orange,
+                        content: Text(
+                          success
+                              ? "$total dosya başarıyla silindi."
+                              : "Bazı dosyalar silinemedi veya işlem iptal edildi.",
+                        ),
+                      ),
+                    );
+                  }
+
+                  isDeletingNotifier.dispose();
+                  progressNotifier.dispose();
+                },
+                child: const Text("EVET, KALICI OLARAK SİL"),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
