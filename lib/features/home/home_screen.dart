@@ -626,33 +626,75 @@ class _HomeScreenState extends State<HomeScreen>
                     const Spacer(),
                     Container(
                       margin: const EdgeInsets.only(right: 8),
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          audioProvider.playSongList(
-                            audioProvider.songs,
-                            shuffle: true,
-                          );
-                        },
-                        icon: const Icon(Icons.shuffle, size: 18),
-                        label: const Text(
-                          "Karıştır ve Oynat",
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                      child: Row(
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              if (audioProvider.songs.isNotEmpty) {
+                                audioProvider.playSongList(
+                                  audioProvider.songs,
+                                  initialIndex: 0,
+                                  shuffle: false,
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.play_arrow, size: 18),
+                            label: const Text(
+                              "Oynat",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              elevation: 4,
+                            ),
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              if (audioProvider.songs.isNotEmpty) {
+                                audioProvider.playSongList(
+                                  audioProvider.songs,
+                                  shuffle: true,
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.shuffle, size: 18),
+                            label: const Text(
+                              "Karıştır",
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.surfaceLight,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                side: const BorderSide(
+                                  color: AppColors.primary,
+                                  width: 1,
+                                ),
+                              ),
+                              elevation: 4,
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          elevation: 4,
-                        ),
+                        ],
                       ),
                     ),
                     IconButton(
