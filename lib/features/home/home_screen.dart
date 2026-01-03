@@ -347,10 +347,16 @@ class _HomeScreenState extends State<HomeScreen>
                             context: context,
                             title: "Tekrar Köşesi",
                             items: duplicates,
-                            onConfirm: (selected) => Provider.of<AudioProvider>(
-                              context,
-                              listen: false,
-                            ).removeSongsFromLibrary(selected),
+                            onConfirm: (selected) {
+                              _showFinalDeleteConfirmation(
+                                context,
+                                selected,
+                                Provider.of<AudioProvider>(
+                                  context,
+                                  listen: false,
+                                ),
+                              );
+                            },
                           );
                         }
                       }
