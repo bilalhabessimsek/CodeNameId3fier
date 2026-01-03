@@ -845,7 +845,7 @@ class _HomeScreenState extends State<HomeScreen>
   ) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.black,
         shape: RoundedRectangleBorder(
           side: const BorderSide(color: Colors.red, width: 2),
@@ -876,7 +876,10 @@ class _HomeScreenState extends State<HomeScreen>
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(context);
+              debugPrint(
+                "DEBUG: Bulk delete button pressed. Items to delete: ${selected.length}",
+              );
+              Navigator.pop(dialogContext); // Close confirmation dialog
 
               final total = selected.length;
 
@@ -884,12 +887,12 @@ class _HomeScreenState extends State<HomeScreen>
               final progressNotifier = ValueNotifier<int>(0);
 
               showDialog(
-                context: context,
+                context: context, // Use screen context
                 barrierDismissible: false,
-                builder: (context) {
+                builder: (progressDialogContext) {
                   return ValueListenableBuilder<int>(
                     valueListenable: progressNotifier,
-                    builder: (context, val, child) {
+                    builder: (pCtx, val, child) {
                       return AlertDialog(
                         backgroundColor: AppColors.surface,
                         title: const Text(
@@ -926,9 +929,9 @@ class _HomeScreenState extends State<HomeScreen>
               );
 
               // 3. Execution
-              final success = await provider.physicallyDeleteSongs(
+              final bool success = await provider.physicallyDeleteSongs(
                 selected,
-                context: context, // Pass context here
+                context: context, // Pass screen context
                 onProgress: (c, t) {
                   progressNotifier.value = c;
                 },
@@ -942,18 +945,29 @@ class _HomeScreenState extends State<HomeScreen>
                 ).pop(); // Progress dialog
 
                 // ALSO CLOSE the maintenance dialog (Tekrar Köşesi/Merhumlar Konağı)
-                // because the list it holds is now stale.
                 Navigator.of(context).pop();
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: Colors.green,
-                    content: Text(
-                      "${selected.length} dosya başarıyla silindi.",
-                      style: const TextStyle(color: Colors.white),
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: Colors.green,
+                      content: Text(
+                        "${selected.length} dosya başarıyla silindi.",
+                        style: const TextStyle(color: Colors.white),
+                      ),
                     ),
-                  ),
-                );
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: Colors.orange,
+                      content: Text(
+                        "Bazı dosyalar silinemedi veya işlem iptal edildi.",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  );
+                }
               }
               progressNotifier.dispose();
             },
