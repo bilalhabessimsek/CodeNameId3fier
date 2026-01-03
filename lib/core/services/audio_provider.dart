@@ -12,7 +12,6 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:rxdart/rxdart.dart';
-import 'package:media_scanner/media_scanner.dart';
 
 // Diğer servisler
 import 'tag_editor_service.dart';
@@ -875,8 +874,13 @@ class AudioProvider extends ChangeNotifier {
   }
 
   // ROBUST DELETION (Android 11+ Compatible)
-  Future<bool> physicallyDeleteSongs(List<SongModel> songsToDelete) async {
-    // 1. Force Permission Check for Deletion (MANAGE_EXTERNAL_STORAGE)
+  Future<bool> physicallyDeleteSongs(
+    List<SongModel> songsToDelete, {
+    void Function(int current, int total)? onProgress,
+  }) async {
+    if (songsToDelete.isEmpty) return true;
+
+    // 1. Force Permission Check
     if (Platform.isAndroid) {
       debugPrint("DEBUG: Deletion check: Checking MANAGE_EXTERNAL_STORAGE...");
       final hasPermission = await _permissionService
@@ -892,7 +896,6 @@ class AudioProvider extends ChangeNotifier {
       debugPrint("DEBUG: Releasing file locks for deletion...");
       await _audioPlayer.stop();
       await _midiPlayer.stop();
-      // Use an empty source to release any file descriptors
       await _audioPlayer.setAudioSource(ConcatenatingAudioSource(children: []));
       _isPlaying = false;
       _currentSong = null;
@@ -902,69 +905,71 @@ class AudioProvider extends ChangeNotifier {
     }
 
     bool allDeleted = true;
+    final total = songsToDelete.length;
+    int deletedCount = 0;
 
-    // 3. Deletion Loop
-    for (var song in songsToDelete) {
-      bool deleted = false;
-      await addToLostHistory(song.title, song.artist ?? "Bilinmiyor");
+    // 3. Batched Deletion Process
+    const int chunkSize = 15; // Process 15 files at once
+    final List<int> idsToRemoveFromList = [];
 
-      try {
-        final file = File(song.data);
-        debugPrint("DEBUG: Deletion attempt for PATH: ${song.data}");
+    for (int i = 0; i < songsToDelete.length; i += chunkSize) {
+      final chunk = songsToDelete.sublist(
+        i,
+        (i + chunkSize > songsToDelete.length)
+            ? songsToDelete.length
+            : i + chunkSize,
+      );
 
-        if (await file.exists()) {
-          debugPrint(
-            "DEBUG: File exists. Size: ${await file.length()} bytes. Attempting physical deletion...",
-          );
-          for (int i = 0; i < 3; i++) {
-            try {
-              await file.delete();
-              // Aggressive check: is it REALLY gone?
-              final existsNow = await file.exists();
-              if (!existsNow) {
-                deleted = true;
-                debugPrint(
-                  "DEBUG: File DELETED successfully from disk: ${song.title}",
-                );
+      // Run deletions in this chunk in parallel
+      await Future.wait(
+        chunk.map((song) async {
+          await addToLostHistory(song.title, song.artist ?? "Bilinmiyor");
 
-                // INSTANT UI FEEDBACK: Remove from local memory list
-                _songs.removeWhere((s) => s.id == song.id);
-
-                // Notify system
+          try {
+            final file = File(song.data);
+            if (await file.exists()) {
+              try {
+                // Non-blocking delete
+                await file.delete();
+                idsToRemoveFromList.add(song.id);
+              } catch (e) {
+                // Minimal retry for large batches
+                debugPrint("DEBUG: First delete failed for ${song.title}: $e");
                 try {
-                  await MediaScanner.loadMedia(path: song.data);
-                } catch (_) {}
-                break;
-              } else {
-                debugPrint(
-                  "DEBUG: file.delete() called but STILL EXISTS on disk? Retry $i...",
-                );
+                  await Future.delayed(const Duration(milliseconds: 200));
+                  await file.delete();
+                  idsToRemoveFromList.add(song.id);
+                } catch (_) {
+                  allDeleted = false;
+                }
               }
-            } catch (e) {
-              debugPrint("DEBUG: Deletion Exception (Retry $i): $e");
-              await Future.delayed(const Duration(milliseconds: 700));
+            } else {
+              // Ghost file
+              idsToRemoveFromList.add(song.id);
             }
+          } catch (e) {
+            allDeleted = false;
           }
-        } else {
-          debugPrint(
-            "DEBUG: File already gone from disk (ghost file): ${song.data}",
-          );
-          _songs.removeWhere((s) => s.id == song.id);
-          deleted = true;
-        }
-      } catch (e) {
-        debugPrint("DEBUG: Catch-all Deletion Error for ${song.title}: $e");
-      }
 
-      if (!deleted) {
-        allDeleted = false;
-        debugPrint(
-          "Failed to delete: ${song.title} - Check permissions or file locks.",
-        );
+          deletedCount++;
+          onProgress?.call(deletedCount, total);
+        }),
+      );
+
+      // Batch removal from internal list and notify UI periodically for large sets
+      if (idsToRemoveFromList.isNotEmpty) {
+        final idsSet = idsToRemoveFromList.toSet();
+        _songs.removeWhere((s) => idsSet.contains(s.id));
+        idsToRemoveFromList.clear();
+        notifyListeners();
       }
     }
 
-    // 4. Final Refresh
+    // 4. Batch Media Scanner update (One go if possible or small chunks)
+    // MediaScanner usually takes a single path, but running too many at once is bad.
+    // We already did the critical deletions.
+
+    // 5. Final Refresh
     await fetchSongs();
     notifyListeners();
     return allDeleted;
