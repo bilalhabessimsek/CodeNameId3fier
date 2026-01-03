@@ -936,29 +936,24 @@ class _HomeScreenState extends State<HomeScreen>
 
               // Close Progress Dialog
               if (context.mounted) {
-                Navigator.of(context, rootNavigator: true).pop();
+                Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).pop(); // Progress dialog
 
-                if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: Colors.green,
-                      content: Text(
-                        "${selected.length} dosya başarıyla silindi.",
-                        style: const TextStyle(color: Colors.white),
-                      ),
+                // ALSO CLOSE the maintenance dialog (Tekrar Köşesi/Merhumlar Konağı)
+                // because the list it holds is now stale.
+                Navigator.of(context).pop();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: Colors.green,
+                    content: Text(
+                      "${selected.length} dosya başarıyla silindi.",
+                      style: const TextStyle(color: Colors.white),
                     ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: Colors.orange,
-                      content: Text(
-                        "Bazı dosyalar silinemedi. İzinleri kontrol edin.",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  );
-                }
+                  ),
+                );
               }
               progressNotifier.dispose();
             },

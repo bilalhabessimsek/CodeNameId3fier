@@ -977,19 +977,21 @@ class AudioProvider extends ChangeNotifier {
     // MediaScanner usually takes a single path, but running too many at once is bad.
     // We already did the critical deletions.
 
-    // 5. Final Refresh with Delay for System Sync
+    // 5. Final Refresh Strategy
     if (songsToDelete.length > 50) {
-      debugPrint("DEBUG: Large batch deleted. Waiting for MediaStore sync...");
-      await Future.delayed(const Duration(seconds: 2));
+      debugPrint(
+        "DEBUG: Bulk deletion complete. Skipping immediate re-fetch to avoid MediaStore ghosts.",
+      );
+      // We already cleaned _songs via removeWhere in the loop.
+      // Just notify the listeners to refresh UI with our cleaned local list.
     } else {
+      debugPrint("DEBUG: Small batch deletion. Fetching fresh data...");
       await Future.delayed(const Duration(milliseconds: 500));
+      await fetchSongs();
     }
 
-    // Only fetch if we really need to sync with disk, but for bulk, trust our removeWhere
-    await fetchSongs();
-
     debugPrint(
-      "DEBUG: Deletion operation finished. Remaining songs: ${_songs.length}",
+      "DEBUG: Deletion operation finished. Current memory count: ${_songs.length}",
     );
     notifyListeners();
     return allDeleted;
