@@ -398,27 +398,6 @@ class _PlayerScreenState extends State<PlayerScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         IconButton(
-                          iconSize: 32,
-                          icon: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white24,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.close_rounded,
-                              color: Colors.white,
-                            ),
-                          ),
-                          onPressed: () {
-                            audioProvider.pause();
-                            audioProvider.seek(Duration.zero);
-                          },
-                        ),
-                        IconButton(
                           icon: Icon(
                             Icons.shuffle,
                             color: audioProvider.isShuffleMode

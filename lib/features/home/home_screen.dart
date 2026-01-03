@@ -612,11 +612,42 @@ class _HomeScreenState extends State<HomeScreen>
                   vertical: 8,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       "${audioProvider.songs.length} Şarkı",
                       style: const TextStyle(color: Colors.white54),
+                    ),
+                    const Spacer(),
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          audioProvider.playSongList(
+                            audioProvider.songs,
+                            shuffle: true,
+                          );
+                        },
+                        icon: const Icon(Icons.shuffle, size: 18),
+                        label: const Text(
+                          "Karıştır ve Oynat",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 4,
+                        ),
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.sort, color: AppColors.primary),
