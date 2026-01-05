@@ -37,5 +37,5 @@ void main() async {
   }
 
   await outputFile.writeAsString(buffer.toString());
-  print('Done! Combined code written to all_code_bundle.txt');
+  stdout.writeln('Done! Combined code written to all_code_bundle.txt');
 }

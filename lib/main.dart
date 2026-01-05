@@ -1,14 +1,14 @@
-// ==========================================
+﻿// ==========================================
 // FILE: lib/main.dart
 // ==========================================
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'core/theme/app_theme.dart';
-import 'core/services/audio_provider.dart';
-import 'core/services/theme_provider.dart';
-import 'core/services/batch_tag_provider.dart';
-import 'core/widgets/splash_screen.dart';
+import 'cekirdek/tema/uygulama_temasi.dart';
+import 'cekirdek/servisler/ses_saglayici.dart';
+import 'cekirdek/servisler/tema_saglayici.dart';
+import 'cekirdek/servisler/toplu_etiket_saglayici.dart';
+import 'cekirdek/bilesenler/acilis_ekrani.dart';
 
 Future<void> main() async {
   // Binding'in önce başlatıldığından emin oluyoruz.
