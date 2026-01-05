@@ -21,6 +21,7 @@ class _DuplicateTabState extends State<DuplicateTab> {
   final Set<SongModel> _selectedItems = {};
   bool _isDragging = false;
   int? _dragStartIndex;
+  Offset? _lastLocalPosition; // To track position for auto-scroll updates
   Set<SongModel> _initialSelectedItems = {};
 
   // Scroll & Auto-Scroll
@@ -66,19 +67,6 @@ class _DuplicateTabState extends State<DuplicateTab> {
   }
 
   // --- DRAG SELECTION LOGIC (Ported from MaintenanceSelectionDialog) ---
-
-  void _onDragStart(Offset localPosition) {
-    setState(() {
-      _isDragging = true;
-      _initialSelectedItems = Set.from(_selectedItems);
-    });
-
-    final index = _getIndexFromPosition(localPosition);
-    if (index != null && index >= 0 && index < _duplicates.length) {
-      _dragStartIndex = index;
-      _toggleItemSelection(_duplicates[index]);
-    }
-  }
 
   void _onDragUpdate(Offset localPosition, double listHeight) {
     if (!_isDragging || _dragStartIndex == null) return;
@@ -132,6 +120,17 @@ class _DuplicateTabState extends State<DuplicateTab> {
       if (_currentScrollSpeed < 0 && currentScroll <= 0) return;
 
       _scrollController.jumpTo(target.clamp(0.0, maxScroll));
+
+      // Update selection while auto-scrolling (if finger is held still)
+      if (_lastLocalPosition != null) {
+        final currentIndex = _getIndexFromPosition(_lastLocalPosition!);
+        if (currentIndex != null &&
+            currentIndex >= 0 &&
+            currentIndex < _duplicates.length &&
+            _dragStartIndex != null) {
+          _updateSelectionRange(_dragStartIndex!, currentIndex);
+        }
+      }
     });
   }
 
@@ -321,6 +320,17 @@ class _DuplicateTabState extends State<DuplicateTab> {
     progressNotifier.dispose();
   }
 
+  String _formatSize(dynamic song) {
+    try {
+      final int bytes = song.size;
+      if (bytes < 1024) return "$bytes B";
+      if (bytes < 1024 * 1024) return "${(bytes / 1024).toStringAsFixed(1)} KB";
+      return "${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB";
+    } catch (_) {
+      return "?";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -410,29 +420,50 @@ class _DuplicateTabState extends State<DuplicateTab> {
             ),
           ),
           Expanded(
-            child: Listener(
-              onPointerDown: (event) => _onDragStart(event.localPosition),
-              onPointerMove: (event) {
-                final RenderBox? box =
-                    _listKey.currentContext?.findRenderObject() as RenderBox?;
-                if (box != null) {
-                  _onDragUpdate(event.localPosition, box.size.height);
-                }
-              },
-              onPointerUp: (_) => _onDragEnd(),
-              child: ListView.builder(
-                key: _listKey,
-                controller: _scrollController,
-                physics: _isDragging
-                    ? const NeverScrollableScrollPhysics()
-                    : const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 100),
-                itemCount: _duplicates.length,
-                itemBuilder: (context, index) {
-                  final song = _duplicates[index];
-                  final isSelected = _selectedItems.contains(song);
+            child: ListView.builder(
+              key: _listKey,
+              controller: _scrollController,
+              physics: _isDragging
+                  ? const NeverScrollableScrollPhysics()
+                  : const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 100),
+              itemCount: _duplicates.length,
+              itemBuilder: (context, index) {
+                final song = _duplicates[index];
+                final isSelected = _selectedItems.contains(song);
 
-                  return SizedBox(
+                return GestureDetector(
+                  onLongPressStart: (details) {
+                    final RenderBox? box =
+                        _listKey.currentContext?.findRenderObject()
+                            as RenderBox?;
+                    if (box != null) {
+                      _lastLocalPosition = box.globalToLocal(
+                        details.globalPosition,
+                      );
+                    }
+                    setState(() {
+                      _isDragging = true;
+                      _dragStartIndex = index;
+                      _initialSelectedItems = Set.from(_selectedItems);
+                      _toggleItemSelection(song);
+                    });
+                  },
+                  onLongPressMoveUpdate: (details) {
+                    final RenderBox? box =
+                        _listKey.currentContext?.findRenderObject()
+                            as RenderBox?;
+                    if (box != null) {
+                      final localOffset = box.globalToLocal(
+                        details.globalPosition,
+                      );
+                      _lastLocalPosition = localOffset;
+                      _onDragUpdate(localOffset, box.size.height);
+                    }
+                  },
+                  onLongPressEnd: (_) => _onDragEnd(),
+                  onLongPressCancel: () => _onDragEnd(),
+                  child: SizedBox(
                     height: _itemHeight,
                     child: CheckboxListTile(
                       activeColor: AppColors.primary,
@@ -444,7 +475,7 @@ class _DuplicateTabState extends State<DuplicateTab> {
                         style: const TextStyle(color: Colors.white),
                       ),
                       subtitle: Text(
-                        "${song.artist} • ${(song.duration ?? 0) ~/ 1000}s • ${song.size} bytes",
+                        "${song.artist} • ${(song.duration ?? 0) ~/ 1000}s • ${_formatSize(song)}",
                         maxLines: 1,
                         style: const TextStyle(
                           color: Colors.grey,
@@ -456,9 +487,9 @@ class _DuplicateTabState extends State<DuplicateTab> {
                         _toggleItemSelection(song);
                       },
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ],

@@ -1,12 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:on_audio_query/on_audio_query.dart';
-import '../../core/services/audio_provider.dart';
-import '../../core/services/cloud_recognition_service.dart';
-import '../../core/services/tag_editor_service.dart';
-import '../../core/services/scan_history_service.dart';
 
+import '../../core/services/audio_provider.dart';
+import '../../core/services/batch_tag_provider.dart';
+import '../../core/services/scan_history_service.dart';
 import '../../core/widgets/gradient_background.dart';
 
 class BatchAutoTagScreen extends StatefulWidget {
@@ -17,23 +14,7 @@ class BatchAutoTagScreen extends StatefulWidget {
 }
 
 class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
-  final CloudRecognitionService _cloudService = CloudRecognitionService();
-  final TagEditorService _tagService = TagEditorService();
-
-  // State
-  bool _isScanning = false;
-  bool _isStopping = false;
-  int? _currentScanningId; // Track current ID
   ScanHistoryService? _scanHistory;
-
-  // Results
-  final Map<int, Map<String, dynamic>> _results = {};
-  final Set<int> _approvedIds = {};
-  final Set<int> _processedIds = {}; // Track processed IDs
-
-  // Stats
-  int _processedCount = 0;
-  int _successCount = 0;
 
   @override
   void initState() {
@@ -48,89 +29,9 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _isScanning = false; // Break loop
-    super.dispose();
-  }
-
-  Future<void> _startBatchScan(List<SongModel> songs) async {
-    setState(() {
-      _isScanning = true;
-      _isStopping = false;
-      _processedCount = 0;
-      _successCount = 0;
-      _results.clear();
-      _approvedIds.clear();
-      _processedIds.clear();
-      _currentScanningId = null;
-    });
-
-    for (final song in songs) {
-      if (!mounted || _isStopping) break;
-
-      setState(() {
-        _currentScanningId = song.id;
-      });
-
-      try {
-        final resultPromise = _cloudService.identifyMusicInCloud(song.data);
-        final result = await resultPromise.timeout(
-          const Duration(seconds: 15),
-          onTimeout: () {
-            throw TimeoutException("Scan timed out after 15s");
-          },
-        );
-
-        if (!mounted) break;
-
-        // If we get here, processing for this song attempted
-
-        if (result != null &&
-            (result['success'] == true || result['status'] == 'success')) {
-          final title = result['title'];
-          final artist = result['artist'];
-
-          if (title != null && artist != null) {
-            setState(() {
-              _results[song.id] = result;
-              _successCount++;
-              _approvedIds.add(song.id); // Auto-approve by default
-            });
-            await _scanHistory?.markAsScanned(song.id);
-          } else {
-            await _scanHistory?.markAsFailed(song.id);
-          }
-        } else {
-          await _scanHistory?.markAsFailed(song.id);
-        }
-      } catch (e) {
-        debugPrint("Batch Error on ${song.title}: $e");
-        await _scanHistory?.markAsFailed(song.id);
-      }
-
-      setState(() {
-        _processedIds.add(song.id);
-        _processedCount++;
-      });
-
-      // Small delay to be nice to the server and UI
-      await Future.delayed(const Duration(milliseconds: 500));
-    }
-
-    if (mounted) {
-      setState(() {
-        _isScanning = false;
-        _currentScanningId = null;
-      });
-    }
-  }
-
-  Future<void> _applyApproved(List<SongModel> songs) async {
-    if (_approvedIds.isEmpty) return;
-
-    final provider = Provider.of<AudioProvider>(context, listen: false);
-    int updatedCount = 0;
+  Future<void> _applyApproved(BuildContext context) async {
+    final provider = Provider.of<BatchTagProvider>(context, listen: false);
+    final audioProvider = Provider.of<AudioProvider>(context, listen: false);
 
     // Show loading
     showDialog(
@@ -139,34 +40,11 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
 
-    for (final song in songs) {
-      if (_approvedIds.contains(song.id)) {
-        final data = _results[song.id];
-        if (data != null) {
-          final title = data['title'];
-          final artist = data['artist'];
-          final album = data['album'];
-          final releaseId = data['release_id'];
-          String? coverUrl;
-          if (releaseId != null) {
-            coverUrl = "https://coverartarchive.org/release/$releaseId/front";
-          }
+    int updatedCount = await provider.applyApproved(audioProvider);
 
-          await _tagService.updateTags(
-            filePath: song.data,
-            title: title,
-            artist: artist,
-            album: album,
-            coverUrl: coverUrl,
-          );
-          updatedCount++;
-        }
-      }
-    }
-
-    if (mounted) {
+    if (context.mounted) {
       Navigator.pop(context); // Close loading
-      provider.fetchAllData(); // Refresh library
+      audioProvider.fetchAllData(); // Refresh library
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("$updatedCount şarkı güncellendi! ✅")),
       );
@@ -176,12 +54,24 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<AudioProvider>(context);
+    // We listen to BatchTagProvider for updates
+    final batchProvider = Provider.of<BatchTagProvider>(context);
+    final audioProvider = Provider.of<AudioProvider>(context);
 
-    // Filter out previously scanned songs
-    final songs = provider.songs.where((s) {
+    // Filter logic remains similar but relies on provider state
+    // Note: If scanning is active, we might want to show everything or just the queue?
+    // For now, consistent with before: filter out already scanned/failed unless they are in current session results
+    final songs = audioProvider.songs.where((s) {
+      // If result exists in current session, show it
+      if (batchProvider.results.containsKey(s.id)) return true;
+      if (batchProvider.processedIds.contains(s.id)) return true;
+
+      // Otherwise filter by history
       if (_scanHistory == null) return true;
-      return !_scanHistory!.isScanned(s.id);
+      final isScanned = _scanHistory!.isScanned(s.id);
+      final isFailed = _scanHistory!.isFailed(s.id);
+
+      return !isScanned && !isFailed;
     }).toList();
 
     return GradientBackground(
@@ -192,10 +82,22 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
           elevation: 0,
           title: const Text("Otomatik Düzenleyici"),
           actions: [
-            if (_isScanning)
-              IconButton(
-                icon: const Icon(Icons.stop_circle_outlined, color: Colors.red),
-                onPressed: () => setState(() => _isStopping = true),
+            // "Kaydet ve Çık" instead of just "Stop"
+            if (batchProvider.isScanning ||
+                batchProvider.approvedIds.isNotEmpty)
+              TextButton.icon(
+                icon: const Icon(Icons.save_alt, color: Colors.white),
+                label: const Text(
+                  "Kaydet ve Çık",
+                  style: TextStyle(color: Colors.white),
+                ),
+                onPressed: () async {
+                  if (batchProvider.isScanning) {
+                    batchProvider.stopScanning();
+                  }
+                  // Apply approved changes
+                  await _applyApproved(context);
+                },
               ),
           ],
         ),
@@ -208,9 +110,13 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStat("Toplam", "${songs.length}"),
-                  _buildStat("İşlenen", "$_processedCount"),
-                  _buildStat("Başarılı", "$_successCount", color: Colors.green),
+                  _buildStat("Kuyruk", "${songs.length}"),
+                  _buildStat("İşlenen", "${batchProvider.processedCount}"),
+                  _buildStat(
+                    "Başarılı",
+                    "${batchProvider.successCount}",
+                    color: Colors.green,
+                  ),
                 ],
               ),
             ),
@@ -221,11 +127,12 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                 itemCount: songs.length,
                 itemBuilder: (context, index) {
                   final song = songs[index];
-                  final result = _results[song.id];
-                  final isScanningThis = _currentScanningId == song.id;
+                  final result = batchProvider.results[song.id];
+                  final isScanningThis =
+                      batchProvider.currentScanningId == song.id;
                   final isProcessed =
-                      _results.containsKey(song.id) ||
-                      (_processedIds.contains(song.id));
+                      batchProvider.results.containsKey(song.id) ||
+                      batchProvider.processedIds.contains(song.id);
 
                   // Show loading if this is the one currently being scanned
                   if (isScanningThis) {
@@ -236,8 +143,8 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                         style: const TextStyle(color: Colors.white70),
                       ),
                       subtitle: const Text(
-                        "Taranıyor...",
-                        style: TextStyle(color: Colors.grey),
+                        "Taranıyor... (Arkaplanda devam eder)",
+                        style: TextStyle(color: Colors.greenAccent),
                       ),
                     );
                   }
@@ -246,7 +153,9 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                   if (result != null) {
                     final newTitle = result['title'];
                     final newArtist = result['artist'];
-                    final isApproved = _approvedIds.contains(song.id);
+                    final isApproved = batchProvider.approvedIds.contains(
+                      song.id,
+                    );
 
                     return Container(
                       color: isApproved
@@ -256,13 +165,7 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                         value: isApproved,
                         activeColor: Colors.green,
                         onChanged: (val) {
-                          setState(() {
-                            if (val == true) {
-                              _approvedIds.add(song.id);
-                            } else {
-                              _approvedIds.remove(song.id);
-                            }
-                          });
+                          batchProvider.toggleApproval(song.id);
                         },
                         title: Row(
                           children: [
@@ -324,10 +227,15 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                       song.title,
                       style: const TextStyle(color: Colors.white54),
                     ),
-                    subtitle: Text(
-                      song.artist ?? "-",
-                      style: const TextStyle(color: Colors.white24),
-                    ),
+                    subtitle: isProcessed
+                        ? const Text(
+                            "Sonuç bulunamadı",
+                            style: TextStyle(color: Colors.redAccent),
+                          )
+                        : Text(
+                            song.artist ?? "-",
+                            style: const TextStyle(color: Colors.white24),
+                          ),
                     trailing: isProcessed && result == null
                         ? const Icon(
                             Icons.error_outline,
@@ -344,7 +252,7 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  if (!_isScanning)
+                  if (!batchProvider.isScanning)
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
@@ -352,13 +260,14 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.all(16),
                         ),
-                        onPressed: () => _startBatchScan(songs),
+                        onPressed: () => batchProvider.startBatchScan(songs),
                         icon: const Icon(Icons.play_arrow),
                         label: const Text("Taramayı Başlat"),
                       ),
                     ),
 
-                  if (!_isScanning && _approvedIds.isNotEmpty) ...[
+                  if (!batchProvider.isScanning &&
+                      batchProvider.approvedIds.isNotEmpty) ...[
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton.icon(
@@ -366,9 +275,11 @@ class _BatchAutoTagScreenState extends State<BatchAutoTagScreen> {
                           backgroundColor: Colors.green,
                           padding: const EdgeInsets.all(16),
                         ),
-                        onPressed: () => _applyApproved(songs),
+                        onPressed: () => _applyApproved(context),
                         icon: const Icon(Icons.save),
-                        label: Text("Uygula (${_approvedIds.length})"),
+                        label: Text(
+                          "Uygula (${batchProvider.approvedIds.length})",
+                        ),
                       ),
                     ),
                   ],

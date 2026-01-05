@@ -402,8 +402,8 @@ class AudioProvider extends ChangeNotifier {
       }).toList();
 
       // 0.10.x API Kullanımı
-      await _audioPlayer.setAudioSources(
-        safeAudioSourceList,
+      await _audioPlayer.setAudioSource(
+        ConcatenatingAudioSource(children: safeAudioSourceList),
         initialIndex: index >= 0 ? index : 0,
       );
 
@@ -591,6 +591,7 @@ class AudioProvider extends ChangeNotifier {
                     "artist": "MIDI File",
                     "album": "Unknown",
                     "duration": 0,
+                    "_size": await entity.length(),
                     "is_music": true,
                   }),
                 );
@@ -857,8 +858,27 @@ class AudioProvider extends ChangeNotifier {
         _songs.map((song) async {
           try {
             final file = File(song.data);
-            if (!await file.exists()) return song;
-          } catch (_) {
+            if (!await file.exists()) {
+              debugPrint("DEBUG: Detect: Missing file found: ${song.data}");
+              return song;
+            }
+
+            // Check for 0 duration (Corrupt/Empty files)
+            // But exclude MIDI files as they often have 0 duration in metadata
+            final isMidi =
+                song.data.toLowerCase().endsWith('.mid') ||
+                song.data.toLowerCase().endsWith('.midi');
+
+            if (!isMidi && (song.duration == null || song.duration == 0)) {
+              debugPrint(
+                "DEBUG: Detect: CORRUPT file (0 duration): ${song.title} (${song.data})",
+              );
+              // Only consider it corrupt if file size is small (< 100KB) ?
+              // User asked for "süresi olmayan ve de midi olmayan"
+              return song;
+            }
+          } catch (e) {
+            debugPrint("DEBUG: Detect: Error checking ${song.data}: $e");
             return song;
           }
           return null;
@@ -1008,9 +1028,10 @@ class AudioProvider extends ChangeNotifier {
       // We already cleaned _songs via removeWhere in the loop.
       // Just notify the listeners to refresh UI with our cleaned local list.
     } else {
-      debugPrint("DEBUG: Small batch deletion. Fetching fresh data...");
-      await Future.delayed(const Duration(milliseconds: 500));
-      await fetchSongs();
+      debugPrint(
+        "DEBUG: Small batch deletion. Skipping fetch to prevent ghosts.",
+      );
+      // We rely on local list update.
     }
 
     debugPrint(

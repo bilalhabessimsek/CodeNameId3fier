@@ -45,6 +45,7 @@ class _MaintenanceSelectionDialogState
   bool _isDragging = false;
   int? _dragStartIndex;
   Set<SongModel> _initialSelectedItems = {};
+  Offset? _lastLocalPosition; // To track position for auto-scroll updates
 
   // Liste ve Scroll kontrolü
   final ScrollController _scrollController = ScrollController();
@@ -60,19 +61,6 @@ class _MaintenanceSelectionDialogState
     _autoScrollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _onDragStart(Offset localPosition) {
-    setState(() {
-      _isDragging = true;
-      _initialSelectedItems = Set.from(_selectedItems);
-    });
-
-    final index = _getIndexFromPosition(localPosition);
-    if (index != null && index >= 0 && index < widget.items.length) {
-      _dragStartIndex = index;
-      _toggleItemSelection(widget.items[index]);
-    }
   }
 
   void _onDragUpdate(Offset localPosition, double listHeight) {
@@ -141,6 +129,17 @@ class _MaintenanceSelectionDialogState
       }
 
       _scrollController.jumpTo(target.clamp(0.0, maxScroll));
+
+      // Update selection while auto-scrolling (if finger is held still)
+      if (_lastLocalPosition != null) {
+        final currentIndex = _getIndexFromPosition(_lastLocalPosition!);
+        if (currentIndex != null &&
+            currentIndex >= 0 &&
+            currentIndex < widget.items.length &&
+            _dragStartIndex != null) {
+          _updateSelectionRange(_dragStartIndex!, currentIndex);
+        }
+      }
     });
   }
 
@@ -217,27 +216,48 @@ class _MaintenanceSelectionDialogState
             ),
             const Divider(color: Colors.white10),
             Expanded(
-              child: Listener(
-                onPointerDown: (event) => _onDragStart(event.localPosition),
-                onPointerMove: (event) {
-                  final RenderBox? box =
-                      _listKey.currentContext?.findRenderObject() as RenderBox?;
-                  if (box != null) {
-                    _onDragUpdate(event.localPosition, box.size.height);
-                  }
-                },
-                onPointerUp: (_) => _onDragEnd(),
-                child: ListView.builder(
-                  key: _listKey,
-                  controller: _scrollController,
-                  physics: _isDragging
-                      ? const NeverScrollableScrollPhysics()
-                      : const AlwaysScrollableScrollPhysics(),
-                  itemCount: widget.items.length,
-                  itemBuilder: (context, index) {
-                    final item = widget.items[index];
-                    final isSelected = _selectedItems.contains(item);
-                    return SizedBox(
+              child: ListView.builder(
+                key: _listKey,
+                controller: _scrollController,
+                physics: _isDragging
+                    ? const NeverScrollableScrollPhysics()
+                    : const AlwaysScrollableScrollPhysics(),
+                itemCount: widget.items.length,
+                itemBuilder: (context, index) {
+                  final item = widget.items[index];
+                  final isSelected = _selectedItems.contains(item);
+                  return GestureDetector(
+                    onLongPressStart: (details) {
+                      final RenderBox? box =
+                          _listKey.currentContext?.findRenderObject()
+                              as RenderBox?;
+                      if (box != null) {
+                        _lastLocalPosition = box.globalToLocal(
+                          details.globalPosition,
+                        );
+                      }
+                      setState(() {
+                        _isDragging = true;
+                        _dragStartIndex = index;
+                        _initialSelectedItems = Set.from(_selectedItems);
+                        _toggleItemSelection(item);
+                      });
+                    },
+                    onLongPressMoveUpdate: (details) {
+                      final RenderBox? box =
+                          _listKey.currentContext?.findRenderObject()
+                              as RenderBox?;
+                      if (box != null) {
+                        final localOffset = box.globalToLocal(
+                          details.globalPosition,
+                        );
+                        _lastLocalPosition = localOffset;
+                        _onDragUpdate(localOffset, box.size.height);
+                      }
+                    },
+                    onLongPressEnd: (_) => _onDragEnd(),
+                    onLongPressCancel: () => _onDragEnd(),
+                    child: SizedBox(
                       height: _itemHeight,
                       child: CheckboxListTile(
                         activeColor: AppColors.primary,
@@ -265,9 +285,9 @@ class _MaintenanceSelectionDialogState
                           _toggleItemSelection(item);
                         },
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

@@ -7,6 +7,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/audio_provider.dart';
 import 'core/services/theme_provider.dart';
+import 'core/services/batch_tag_provider.dart';
 import 'core/widgets/splash_screen.dart';
 
 Future<void> main() async {
@@ -46,6 +47,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AudioProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => BatchTagProvider()),
       ],
       child: MaterialApp(
         title: 'Modern Müzik Çalar', // Karakter hatası düzeltildi

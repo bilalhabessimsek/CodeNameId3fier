@@ -109,17 +109,78 @@ class _FailedScansScreenState extends State<FailedScansScreen> {
           actions: [
             if (_failedSongs.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.delete_sweep),
-                tooltip: "Listeyi Temizle (Dosyaları Silmez)",
+                icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                tooltip: "Tümünü Sil ve Arşivle",
                 onPressed: () async {
-                  await _scanHistory?.clearHistory(); // Or just clear failed?
-                  // Let's just clear failed logic manually for now to be safe
-                  // Implementing clearFailed only in service would be better but for now:
-                  for (final s in _failedSongs) {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: AppColors.surface,
+                      title: const Text(
+                        "Tümünü Sil?",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      content: const Text(
+                        "Listede görünen tüm dosyalar cihazdan silinecek.\n\n"
+                        "Silinen dosyaların isimleri 'Kaybedilen Şarkılar' listesine eklenecek, "
+                        "böylece onları daha sonra tekrar yüklemek isteyebilirsiniz.",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text("Vazgeç"),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                          ),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text("Tümünü Sil"),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm != true || !mounted) return;
+
+                  final provider = Provider.of<AudioProvider>(
+                    context,
+                    listen: false,
+                  );
+                  final List<SongModel> toDelete = List.from(_failedSongs);
+
+                  // 1. Add to Lost History
+                  for (final s in toDelete) {
+                    await provider.addToLostHistory(
+                      s.title,
+                      s.artist ?? "Bilinmiyor",
+                    );
+                  }
+
+                  // 2. Delete Physically
+                  await provider.physicallyDeleteSongs(
+                    toDelete,
+                    context: context,
+                  );
+
+                  // 3. Clear List
+                  for (final s in toDelete) {
                     await _scanHistory?.removeFromFailed(s.id);
                   }
+
                   if (mounted) {
-                    setState(() => _failedSongs.clear());
+                    setState(() {
+                      _failedSongs.clear();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "${toDelete.length} dosya silindi ve geçmişe eklendi.",
+                        ),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
                   }
                 },
               ),
